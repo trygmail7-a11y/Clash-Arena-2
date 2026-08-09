@@ -19,13 +19,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip clash-arena.zip
+      - name: Unzip clash-arena-updated.zip
         run: |
-          if [ ! -f "clash-arena.zip" ]; then
+          if [ ! -f "clash-arena-updated.zip" ]; then
             echo "clash-arena.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena.zip -d extracted
+          unzip -q clash-arena-updated.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
