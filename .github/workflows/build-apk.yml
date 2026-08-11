@@ -19,13 +19,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip clash-arena-updated.zip
+      - name: Unzip clash-arena.zip
         run: |
-          if [ ! -f "clash-arena-updated.zip" ]; then
+          if [ ! -f "clash-arena.zip" ]; then
             echo "clash-arena.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena-updated.zip -d extracted
+          unzip -q clash-arena.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -42,12 +42,20 @@ jobs:
         working-directory: extracted/clash-arena
         run: npm install
 
+      - name: Add push notifications & browser plugins
+        working-directory: extracted/clash-arena
+        run: npm install @capacitor/push-notifications @capacitor/browser
+
       - name: Add Android platform (Capacitor)
         working-directory: extracted/clash-arena
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
           fi
+
+      - name: Restore google-services.json from secret
+        working-directory: extracted/clash-arena
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
 
       - name: Generate app icon & splash screen from resources/
         working-directory: extracted/clash-arena
@@ -56,6 +64,16 @@ jobs:
       - name: Sync web assets into Android project
         working-directory: extracted/clash-arena
         run: npx cap sync android
+
+      - name: Fix pink default screen before loading (Android theme patch)
+        # Android's default Material template ships a light purple/pink
+        # windowBackground, which flashes for a moment before our own splash
+        # screen takes over. This script (already in scripts/) forces every
+        # style/color that controls that flash to white. It must run from
+        # the project root, since it looks for "android/app/..." relative
+        # to the current folder.
+        working-directory: extracted/clash-arena
+        run: python3 scripts/patch-android-theme.py
 
       - name: Grant execute permission to Gradle wrapper
         run: chmod +x extracted/clash-arena/android/gradlew
