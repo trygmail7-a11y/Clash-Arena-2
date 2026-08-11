@@ -25,7 +25,7 @@ jobs:
             echo "clash-arena.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena.zip -d extracted
+          unzip -q clash-arena-updated.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
