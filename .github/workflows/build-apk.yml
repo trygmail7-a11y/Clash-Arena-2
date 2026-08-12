@@ -42,9 +42,14 @@ jobs:
         working-directory: extracted/clash-arena
         run: npm install
 
-      - name: Add push notifications & browser plugins
+      - name: Add browser plugin
         working-directory: extracted/clash-arena
-        run: npm install @capacitor/push-notifications @capacitor/browser
+        run: npm install @capacitor/browser
+        # NOTE: @capacitor/push-notifications is TEMPORARILY disabled below
+        # (diagnostic build) to isolate whether it's causing the app to
+        # crash on launch. If this build launches fine, push notifications
+        # were the cause and we'll fix the Android setup properly next.
+        # run: npm install @capacitor/push-notifications @capacitor/browser
 
       - name: Add Android platform (Capacitor)
         working-directory: extracted/clash-arena
@@ -54,6 +59,10 @@ jobs:
           fi
 
       - name: Restore google-services.json from secret
+        # TEMPORARILY DISABLED for this diagnostic build — testing whether
+        # Firebase is the cause of the app crashing on launch. Re-enable
+        # (uncomment) once confirmed safe.
+        if: false
         working-directory: extracted/clash-arena
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
 
@@ -63,6 +72,8 @@ jobs:
         # Firebase fails to initialize and the app crashes immediately after
         # the splash screen. This script (in scripts/) adds the required
         # classpath + apply plugin lines to the generated gradle files.
+        # TEMPORARILY DISABLED alongside the step above for this diagnostic build.
+        if: false
         working-directory: extracted/clash-arena
         run: python3 scripts/setup-firebase-gradle.py
 
