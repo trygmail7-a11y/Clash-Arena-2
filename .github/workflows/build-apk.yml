@@ -22,7 +22,7 @@ jobs:
       - name: Unzip clash-arena-updated.zip
         run: |
           if [ ! -f "clash-arena-updated.zip" ]; then
-            echo "clash-arena.zip not found at repo root!"
+            echo "clash-arena-updated.zip not found at repo root!"
             exit 1
           fi
           unzip -q clash-arena-updated.zip -d extracted
@@ -56,6 +56,15 @@ jobs:
       - name: Restore google-services.json from secret
         working-directory: extracted/clash-arena
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+
+      - name: Wire up Firebase Gradle plugin (fixes crash-on-launch)
+        # Having google-services.json present is not enough on its own —
+        # without the Google Services Gradle plugin actually processing it,
+        # Firebase fails to initialize and the app crashes immediately after
+        # the splash screen. This script (in scripts/) adds the required
+        # classpath + apply plugin lines to the generated gradle files.
+        working-directory: extracted/clash-arena
+        run: python3 scripts/setup-firebase-gradle.py
 
       - name: Generate app icon & splash screen from resources/
         working-directory: extracted/clash-arena
