@@ -1,45 +1,119 @@
-name: Generate Release Keystore (run once)
+name: Build Release APK
 
-# Run this ONCE from the Actions tab ("Run workflow"), download the
-# resulting keystore, then add it as GitHub secrets so build-apk.yml can
-# sign release APKs with it.
+# Runs automatically on every push to main, and can also be triggered manually
+# from the Actions tab in GitHub.
 #
-# IMPORTANT: Android requires every update to an app be signed with the
-# EXACT SAME key as the original. Generate this once, save it somewhere
-# safe, and never regenerate it once you've published a version signed
-# with it — a new key means users can never update, only reinstall.
-
+# This workflow expects the repo to contain "clash-arena.zip" AT THE ROOT
+# (uploaded directly via GitHub's "Add file â†’ Upload files" â€” no need to
+# extract it yourself). The workflow unzips it before building.
+#
+# Produces a SIGNED release APK (installable and update-safe), not a debug
+# build. Requires these repository secrets to be set first:
+#   RELEASE_KEYSTORE_BASE64   - from generate-keystore.yml's output
+#   RELEASE_STORE_PASSWORD    - the keystore password
+#   RELEASE_KEY_ALIAS         - the key alias
+#   RELEASE_KEY_PASSWORD      - the key password
+#   GOOGLE_SERVICES_JSON_BASE64 - your Firebase google-services.json, base64-encoded
+#
+# NOTE: Push notifications are currently disabled (see the commented-out
+# lines below) after they were found to crash the app on launch during
+# testing. Re-enable once the underlying Android/Firebase setup issue is
+# diagnosed properly (needs a real device log, which needs a computer).
 on:
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  generate:
+  build:
     runs-on: ubuntu-latest
+
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip clash-arena.zip
+        run: |
+          if [ ! -f "clash-arena.zip" ]; then
+            echo "clash-arena.zip not found at repo root!"
+            exit 1
+          fi
+          unzip -q clash-arena.zip -d extracted
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Generate keystore
+      - name: Install project dependencies
+        working-directory: extracted/clash-arena
+        run: npm install
+
+      - name: Add browser plugin
+        working-directory: extracted/clash-arena
+        run: npm install @capacitor/browser
+        # Push notifications temporarily disabled â€” see note at top of file.
+        # run: npm install @capacitor/push-notifications @capacitor/browser
+
+      - name: Add Android platform (Capacitor)
+        working-directory: extracted/clash-arena
         run: |
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -alias clasharena \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass ClashArena2026! \
-            -keypass ClashArena2026! \
-            -dname "CN=Clash Arena, OU=Clash Arena, O=Clash Arena, L=India, ST=India, C=IN"
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
 
-      - name: Base64-encode for easy copy-paste into a GitHub secret
-        run: base64 -w 0 release.keystore > release.keystore.base64.txt
+      - name: Restore google-services.json from secret
+        # Temporarily disabled alongside push notifications â€” see note at
+        # top of file. Re-enable (remove "if: false") once notifications
+        # are re-enabled.
+        if: false
+        working-directory: extracted/clash-arena
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
 
-      - name: Upload keystore + base64 text as downloadable artifacts
+      - name: Wire up Firebase Gradle plugin
+        if: false
+        working-directory: extracted/clash-arena
+        run: python3 scripts/setup-firebase-gradle.py
+
+      - name: Generate app icon & splash screen from resources/
+        working-directory: extracted/clash-arena
+        run: npx capacitor-assets generate --android
+
+      - name: Sync web assets into Android project
+        working-directory: extracted/clash-arena
+        run: npx cap sync android
+
+      - name: Fix pink default screen before loading (Android theme patch)
+        working-directory: extracted/clash-arena
+        run: python3 scripts/patch-android-theme.py
+
+      - name: Restore release keystore from secret
+        working-directory: extracted/clash-arena
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Wire up release signing config
+        working-directory: extracted/clash-arena
+        run: python3 scripts/add-release-signing.py
+
+      - name: Grant execute permission to Gradle wrapper
+        run: chmod +x extracted/clash-arena/android/gradlew
+
+      - name: Build signed release APK
+        working-directory: extracted/clash-arena/android
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload APK as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-keystore
-          path: |
-            release.keystore
-            release.keystore.base64.txt
-            
+          name: clash-arena-release-apk
+          path: extracted/clash-arena/android/app/build/outputs/apk/release/app-release.apk
