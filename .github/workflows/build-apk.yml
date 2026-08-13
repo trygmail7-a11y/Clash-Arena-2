@@ -34,11 +34,11 @@ jobs:
 
       - name: Unzip clash-arena.zip
         run: |
-          if [ ! -f "clash-arena.zip" ]; then
-            echo "clash-arena.zip not found at repo root!"
+          if [ ! -f "clash-arena-release.zip" ]; then
+            echo "clash-arena-release.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena.zip -d extracted
+          unzip -q clash-arena-release.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
