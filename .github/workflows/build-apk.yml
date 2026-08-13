@@ -1,109 +1,45 @@
-name: Build Debug APK
+name: Generate Release Keystore (run once)
 
-# Runs automatically on every push to main, and can also be triggered manually
-# from the Actions tab in GitHub.
+# Run this ONCE from the Actions tab ("Run workflow"), download the
+# resulting keystore, then add it as GitHub secrets so build-apk.yml can
+# sign release APKs with it.
 #
-# This workflow expects the repo to contain "clash-arena.zip" AT THE ROOT
-# (uploaded directly via GitHub's "Add file → Upload files" — no need to
-# extract it yourself). The workflow unzips it before building.
+# IMPORTANT: Android requires every update to an app be signed with the
+# EXACT SAME key as the original. Generate this once, save it somewhere
+# safe, and never regenerate it once you've published a version signed
+# with it — a new key means users can never update, only reinstall.
+
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Unzip clash-arena-updated.zip
-        run: |
-          if [ ! -f "clash-arena-updated.zip" ]; then
-            echo "clash-arena-updated.zip not found at repo root!"
-            exit 1
-          fi
-          unzip -q clash-arena-updated.zip -d extracted
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Install project dependencies
-        working-directory: extracted/clash-arena
-        run: npm install
-
-      - name: Add browser plugin
-        working-directory: extracted/clash-arena
-        run: npm install @capacitor/browser
-        # NOTE: @capacitor/push-notifications is TEMPORARILY disabled below
-        # (diagnostic build) to isolate whether it's causing the app to
-        # crash on launch. If this build launches fine, push notifications
-        # were the cause and we'll fix the Android setup properly next.
-        # run: npm install @capacitor/push-notifications @capacitor/browser
-
-      - name: Add Android platform (Capacitor)
-        working-directory: extracted/clash-arena
+      - name: Generate keystore
         run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias clasharena \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass ClashArena2026! \
+            -keypass ClashArena2026! \
+            -dname "CN=Clash Arena, OU=Clash Arena, O=Clash Arena, L=India, ST=India, C=IN"
 
-      - name: Restore google-services.json from secret
-        # TEMPORARILY DISABLED for this diagnostic build — testing whether
-        # Firebase is the cause of the app crashing on launch. Re-enable
-        # (uncomment) once confirmed safe.
-        if: false
-        working-directory: extracted/clash-arena
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+      - name: Base64-encode for easy copy-paste into a GitHub secret
+        run: base64 -w 0 release.keystore > release.keystore.base64.txt
 
-      - name: Wire up Firebase Gradle plugin (fixes crash-on-launch)
-        # Having google-services.json present is not enough on its own —
-        # without the Google Services Gradle plugin actually processing it,
-        # Firebase fails to initialize and the app crashes immediately after
-        # the splash screen. This script (in scripts/) adds the required
-        # classpath + apply plugin lines to the generated gradle files.
-        # TEMPORARILY DISABLED alongside the step above for this diagnostic build.
-        if: false
-        working-directory: extracted/clash-arena
-        run: python3 scripts/setup-firebase-gradle.py
-
-      - name: Generate app icon & splash screen from resources/
-        working-directory: extracted/clash-arena
-        run: npx capacitor-assets generate --android
-
-      - name: Sync web assets into Android project
-        working-directory: extracted/clash-arena
-        run: npx cap sync android
-
-      - name: Fix pink default screen before loading (Android theme patch)
-        # Android's default Material template ships a light purple/pink
-        # windowBackground, which flashes for a moment before our own splash
-        # screen takes over. This script (already in scripts/) forces every
-        # style/color that controls that flash to white. It must run from
-        # the project root, since it looks for "android/app/..." relative
-        # to the current folder.
-        working-directory: extracted/clash-arena
-        run: python3 scripts/patch-android-theme.py
-
-      - name: Grant execute permission to Gradle wrapper
-        run: chmod +x extracted/clash-arena/android/gradlew
-
-      - name: Build debug APK
-        working-directory: extracted/clash-arena/android
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload APK as build artifact
+      - name: Upload keystore + base64 text as downloadable artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: clash-arena-debug-apk
-          path: extracted/clash-arena/android/app/build/outputs/apk/debug/app-debug.apk
+          name: release-keystore
+          path: |
+            release.keystore
+            release.keystore.base64.txt
+            
