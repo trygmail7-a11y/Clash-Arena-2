@@ -15,10 +15,10 @@ name: Build Release APK
 #   RELEASE_KEY_PASSWORD      - the key password
 #   GOOGLE_SERVICES_JSON_BASE64 - your Firebase google-services.json, base64-encoded
 #
-# NOTE: Push notifications are currently disabled (see the commented-out
-# lines below) after they were found to crash the app on launch during
-# testing. Re-enable once the underlying Android/Firebase setup issue is
-# diagnosed properly (needs a real device log, which needs a computer).
+# Push notifications are ENABLED, with two defensive fixes applied that
+# were missing before (the likely cause of the earlier launch crash):
+#   1. Registration is deferred until after login (not on cold start)
+#   2. Required AndroidManifest.xml notification permission/metadata added
 on:
   push:
     branches: [ main, master ]
@@ -55,11 +55,9 @@ jobs:
         working-directory: extracted/clash-arena
         run: npm install
 
-      - name: Add browser & app plugins
+      - name: Add push notifications, browser & app plugins
         working-directory: extracted/clash-arena
-        run: npm install @capacitor/browser @capacitor/app
-        # Push notifications temporarily disabled — see note at top of file.
-        # run: npm install @capacitor/push-notifications @capacitor/browser @capacitor/app
+        run: npm install @capacitor/push-notifications @capacitor/browser @capacitor/app
 
       - name: Add Android platform (Capacitor)
         working-directory: extracted/clash-arena
@@ -69,17 +67,8 @@ jobs:
           fi
 
       - name: Restore google-services.json from secret
-        # Temporarily disabled alongside push notifications — see note at
-        # top of file. Re-enable (remove "if: false") once notifications
-        # are re-enabled.
-        if: false
         working-directory: extracted/clash-arena
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
-
-      - name: Wire up Firebase Gradle plugin
-        if: false
-        working-directory: extracted/clash-arena
-        run: python3 scripts/setup-firebase-gradle.py
 
       - name: Generate app icon & splash screen from resources/
         working-directory: extracted/clash-arena
@@ -88,6 +77,15 @@ jobs:
       - name: Sync web assets into Android project
         working-directory: extracted/clash-arena
         run: npx cap sync android
+
+      - name: Add notification permission & manifest metadata (crash fix)
+        # Adds POST_NOTIFICATIONS (required on Android 13+) and the default
+        # notification channel/icon metadata Firebase needs — missing
+        # before, and the most likely cause of the app crashing right after
+        # a device registered for push. Must run after `cap sync`, since
+        # that's when AndroidManifest.xml reaches its final merged content.
+        working-directory: extracted/clash-arena
+        run: python3 scripts/setup-notification-manifest.py
 
       - name: Fix pink default screen before loading (Android theme patch)
         working-directory: extracted/clash-arena
