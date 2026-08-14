@@ -3,8 +3,8 @@ name: Build Release APK
 # Runs automatically on every push to main, and can also be triggered manually
 # from the Actions tab in GitHub.
 #
-# This workflow expects the repo to contain "clash-arena.zip" AT THE ROOT
-# (uploaded directly via GitHub's "Add file â†’ Upload files" â€” no need to
+# This workflow expects the repo to contain "clash-arena-release.zip" AT THE ROOT
+# (uploaded directly via GitHub's "Add file → Upload files" — no need to
 # extract it yourself). The workflow unzips it before building.
 #
 # Produces a SIGNED release APK (installable and update-safe), not a debug
@@ -32,7 +32,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip clash-arena.zip
+      - name: Unzip clash-arena-release.zip
         run: |
           if [ ! -f "clash-arena-release.zip" ]; then
             echo "clash-arena-release.zip not found at repo root!"
@@ -55,11 +55,11 @@ jobs:
         working-directory: extracted/clash-arena
         run: npm install
 
-      - name: Add browser plugin
+      - name: Add browser & app plugins
         working-directory: extracted/clash-arena
-        run: npm install @capacitor/browser
-        # Push notifications temporarily disabled â€” see note at top of file.
-        # run: npm install @capacitor/push-notifications @capacitor/browser
+        run: npm install @capacitor/browser @capacitor/app
+        # Push notifications temporarily disabled — see note at top of file.
+        # run: npm install @capacitor/push-notifications @capacitor/browser @capacitor/app
 
       - name: Add Android platform (Capacitor)
         working-directory: extracted/clash-arena
@@ -69,7 +69,7 @@ jobs:
           fi
 
       - name: Restore google-services.json from secret
-        # Temporarily disabled alongside push notifications â€” see note at
+        # Temporarily disabled alongside push notifications — see note at
         # top of file. Re-enable (remove "if: false") once notifications
         # are re-enabled.
         if: false
