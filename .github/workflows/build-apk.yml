@@ -70,6 +70,18 @@ jobs:
         working-directory: extracted/clash-arena
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
 
+      - name: Verify google-services.json decoded correctly
+        working-directory: extracted/clash-arena
+        run: |
+          python3 -c "
+          import json
+          with open('android/app/google-services.json') as f:
+              data = json.load(f)
+          assert 'project_info' in data, 'Missing project_info — file looks corrupted'
+          assert 'client' in data and len(data['client']) > 0, 'Missing client — file looks corrupted'
+          print('google-services.json is valid. project_id:', data['project_info'].get('project_id'))
+          "
+
       - name: Generate app icon & splash screen from resources/
         working-directory: extracted/clash-arena
         run: npx capacitor-assets generate --android
@@ -86,6 +98,15 @@ jobs:
         # that's when AndroidManifest.xml reaches its final merged content.
         working-directory: extracted/clash-arena
         run: python3 scripts/setup-notification-manifest.py
+
+      - name: Force Firebase to initialize (fixes crash confirmed by real device log)
+        # A real crash log showed: "Default FirebaseApp is not initialized
+        # in this process" the moment push registration ran. Rather than
+        # keep trusting the automatic init mechanism that's clearly
+        # failing, this explicitly calls FirebaseApp.initializeApp() in
+        # MainActivity.java so it's guaranteed to run.
+        working-directory: extracted/clash-arena
+        run: python3 scripts/fix-firebase-init.py
 
       - name: Fix pink default screen before loading (Android theme patch)
         working-directory: extracted/clash-arena
