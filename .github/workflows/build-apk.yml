@@ -1,24 +1,21 @@
-name: Build Release APK
+name: Build Admin Panel APK
 
 # Runs automatically on every push to main, and can also be triggered manually
 # from the Actions tab in GitHub.
 #
-# This workflow expects the repo to contain "clash-arena-release.zip" AT THE ROOT
-# (uploaded directly via GitHub's "Add file → Upload files" — no need to
-# extract it yourself). The workflow unzips it before building.
+# This workflow expects the repo to contain "clash-arena-admin.zip" AT THE
+# ROOT (uploaded via GitHub's "Add file â†’ Upload files"). The workflow
+# unzips it before building.
 #
-# Produces a SIGNED release APK (installable and update-safe), not a debug
-# build. Requires these repository secrets to be set first:
-#   RELEASE_KEYSTORE_BASE64   - from generate-keystore.yml's output
-#   RELEASE_STORE_PASSWORD    - the keystore password
-#   RELEASE_KEY_ALIAS         - the key alias
-#   RELEASE_KEY_PASSWORD      - the key password
-#   GOOGLE_SERVICES_JSON_BASE64 - your Firebase google-services.json, base64-encoded
-#
-# Push notifications are ENABLED, with two defensive fixes applied that
-# were missing before (the likely cause of the earlier launch crash):
-#   1. Registration is deferred until after login (not on cold start)
-#   2. Required AndroidManifest.xml notification permission/metadata added
+# Produces a SIGNED release APK. Reuses the SAME signing secrets as the
+# main Clash Arena app's build workflow â€” one signing key can safely sign
+# multiple different apps, no need for a separate keystore:
+#   RELEASE_KEYSTORE_BASE64
+#   RELEASE_STORE_PASSWORD
+#   RELEASE_KEY_ALIAS
+#   RELEASE_KEY_PASSWORD
+# (Copy these same secret values into this repo if they're not already
+# here â€” GitHub secrets don't automatically share across repos.)
 on:
   push:
     branches: [ main, master ]
@@ -32,13 +29,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip clash-arena-release.zip
+      - name: Unzip clash-arena-admin.zip
         run: |
-          if [ ! -f "clash-arena-release.zip" ]; then
-            echo "clash-arena-release.zip not found at repo root!"
+          if [ ! -f "clash-arena-admin.zip" ]; then
+            echo "clash-arena-admin.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena-release.zip -d extracted
+          unzip -q clash-arena-admin.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -52,79 +49,41 @@ jobs:
           java-version: 21
 
       - name: Install project dependencies
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: npm install
 
-      - name: Add push notifications, browser & app plugins
-        working-directory: extracted/clash-arena
-        run: npm install @capacitor/push-notifications @capacitor/browser @capacitor/app
-
       - name: Add Android platform (Capacitor)
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
           fi
 
-      - name: Restore google-services.json from secret
-        working-directory: extracted/clash-arena
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
-
-      - name: Verify google-services.json decoded correctly
-        working-directory: extracted/clash-arena
-        run: |
-          python3 -c "
-          import json
-          with open('android/app/google-services.json') as f:
-              data = json.load(f)
-          assert 'project_info' in data, 'Missing project_info — file looks corrupted'
-          assert 'client' in data and len(data['client']) > 0, 'Missing client — file looks corrupted'
-          print('google-services.json is valid. project_id:', data['project_info'].get('project_id'))
-          "
-
       - name: Generate app icon & splash screen from resources/
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: npx capacitor-assets generate --android
 
       - name: Sync web assets into Android project
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: npx cap sync android
 
-      - name: Add notification permission & manifest metadata (crash fix)
-        # Adds POST_NOTIFICATIONS (required on Android 13+) and the default
-        # notification channel/icon metadata Firebase needs — missing
-        # before, and the most likely cause of the app crashing right after
-        # a device registered for push. Must run after `cap sync`, since
-        # that's when AndroidManifest.xml reaches its final merged content.
-        working-directory: extracted/clash-arena
-        run: python3 scripts/setup-notification-manifest.py
-
-      - name: Force Firebase to initialize (fixes crash confirmed by real device log)
-        # A real crash log showed: "Default FirebaseApp is not initialized
-        # in this process" the moment push registration ran. Rather than
-        # keep trusting the automatic init mechanism that's clearly
-        # failing, this explicitly calls FirebaseApp.initializeApp() in
-        # MainActivity.java so it's guaranteed to run.
-        working-directory: extracted/clash-arena
-        run: python3 scripts/fix-firebase-init.py
-
       - name: Fix pink default screen before loading (Android theme patch)
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: python3 scripts/patch-android-theme.py
 
       - name: Restore release keystore from secret
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
       - name: Wire up release signing config
-        working-directory: extracted/clash-arena
+        working-directory: extracted
         run: python3 scripts/add-release-signing.py
 
       - name: Grant execute permission to Gradle wrapper
-        run: chmod +x extracted/clash-arena/android/gradlew
+        run: chmod +x extracted/android/gradlew
 
       - name: Build signed release APK
-        working-directory: extracted/clash-arena/android
+        working-directory: extracted/android
         env:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
@@ -134,5 +93,5 @@ jobs:
       - name: Upload APK as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: clash-arena-release-apk
-          path: extracted/clash-arena/android/app/build/outputs/apk/release/app-release.apk
+          name: clash-arena-admin-release-apk
+          path: extracted/android/app/build/outputs/apk/release/app-release.apk
