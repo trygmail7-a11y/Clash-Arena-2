@@ -3,7 +3,7 @@ name: Build Release APK
 # Runs automatically on every push to main, and can also be triggered manually
 # from the Actions tab in GitHub.
 #
-# This workflow expects the repo to contain "clash-arena.zip" AT THE ROOT
+# This workflow expects the repo to contain "clash-arena-release.zip" AT THE ROOT
 # (uploaded directly via GitHub's "Add file → Upload files" — no need to
 # extract it yourself). The workflow unzips it before building.
 #
@@ -32,13 +32,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip clash-arena.zip
+      - name: Unzip clash-arena-release.zip
         run: |
-          if [ ! -f "clash-arena.zip" ]; then
-            echo "clash-arena.zip not found at repo root!"
+          if [ ! -f "clash-arena-release.zip" ]; then
+            echo "clash-arena-release.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena.zip -d extracted
+          unzip -q clash-arena-release.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
