@@ -3,7 +3,7 @@ name: Build Admin Panel APK
 # Runs automatically on every push to main, and can also be triggered manually
 # from the Actions tab in GitHub.
 #
-# This workflow expects the repo to contain "clash-arena-admin-WITH-STAFF.zip" AT THE
+# This workflow expects the repo to contain "clash-arena-staff-panel.zip" AT THE
 # ROOT (uploaded via GitHub's "Add file → Upload files"). The workflow
 # unzips it before building.
 #
@@ -29,13 +29,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip clash-arena-admin-WITH-STAFF.zip
+      - name: Unzip clash-arena-staff-panel.zip
         run: |
-          if [ ! -f "clash-arena-admin-WITH-STAFF.zip" ]; then
-            echo "clash-arena-admin-WITH-STAFFzip not found at repo root!"
+          if [ ! -f "clash-arena-staff-panel.zip" ]; then
+            echo "clash-arena-staff-panel.zip not found at repo root!"
             exit 1
           fi
-          unzip -q clash-arena-admin-WITH-STAFF.zip -d extracted
+          unzip -q clash-arena-staff-panel.zip -d extracted
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
